@@ -5,12 +5,17 @@ from scipy.integrate import solve_bvp, trapezoid
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.dynamics import ocp_dyn_bvp, ocp_dyn_bc, lagrange_multiplier
+from nn_models.ocp_model import OCPModule
 
-
+'''
+Benchmark: Optimal control problem
+    Method 1: Solve the optimal control problem using Pontryagin's Minimum
+    Method 2: Use MLP to describe the control function
+'''
 
 
 if __name__ == '__main__':
-
+    
     # t and initial guess
     t0 = 0.
     tf = 0.25
@@ -35,24 +40,15 @@ if __name__ == '__main__':
         mu = lagrange_multiplier(r, v, lambda46, M1, M2, rho)
         u[:, i] = 2 * mu * r - lambda46
 
+
+    # Save data
+    np.save('../result/state_pontryagin.npy', sol.sol(t)[0:6])
+    np.save('../result/control_pontryagin.npy', u)
+
     # Objective: energy
     u_norm = np.linalg.norm(u, axis=0)
     r_norm = np.linalg.norm(sol.sol(t)[0:3], axis=0)
     J = 0.5 * trapezoid(u_norm * u_norm, t)
     print("J = {}".format(J))
 
-    # Draw figures: U Norm, UxUyUz and R
-    plt.figure()
-    plt.plot(t, u_norm)
-    plt.show()
-
-    plt.figure()
-    plt.plot(t, u[0], label='u1')
-    plt.plot(t, u[1], label='u2')
-    plt.plot(t, u[2], label='u3')
-    plt.legend()
-    plt.show()
-
-    plt.figure()
-    plt.plot(t, r_norm)
-    plt.show()   
+    
