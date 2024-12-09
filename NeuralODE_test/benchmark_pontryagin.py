@@ -1,4 +1,5 @@
 import sys
+import argparse
 sys.path.append('..')
 
 from scipy.integrate import solve_bvp, trapezoid
@@ -19,7 +20,7 @@ if __name__ == '__main__':
     # t and initial guess
     t0 = 0.
     tf = 0.25
-    t = np.linspace(t0, tf, 1000)
+    t = np.linspace(t0, tf, 100)
     y0 = np.ones((12, t.size))
     y0[0:6, 0] = np.array([10., 0., 0., 0., 0., np.pi])
     y0[0:6, -1] = np.array([0., 10., 0., 0., 0., np.pi])
@@ -37,13 +38,13 @@ if __name__ == '__main__':
         r = sol.sol(t)[0:3, i]
         v = sol.sol(t)[3:6, i]
         lambda46 = sol.sol(t)[9:12, i]
-        mu = lagrange_multiplier(r, v, lambda46, M1, M2, rho)
+        mu = 0.#lagrange_multiplier(r, v, lambda46, M1, M2, rho)
         u[:, i] = 2 * mu * r - lambda46
 
 
     # Save data
-    np.save('../result/state_pontryagin.npy', sol.sol(t)[0:6])
-    np.save('../result/control_pontryagin.npy', u)
+    np.save('./result/data/state_pontryagin.npy', sol.sol(t)[0:6])
+    np.save('./result/data/control_pontryagin.npy', u)
 
     # Objective: energy
     u_norm = np.linalg.norm(u, axis=0)

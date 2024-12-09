@@ -27,7 +27,7 @@ class OCPModule(nn.Module):
             hidden_dim=64,
             output_dim=3,
             hidden_depth=2,
-            act=nn.ReLU,
+            act=nn.LeakyReLU,
         )
         
     # Forward pass: ODE function
@@ -43,6 +43,7 @@ class OCPModule(nn.Module):
         u = self.control_net(y)
         u_norm = torch.norm(u, dim=1).detach().cpu().numpy()
         J = 0.5 * integrate.trapezoid(u_norm**2, t.detach().cpu().numpy())
+        J = torch.from_numpy(np.array(J))
         return J
 
 
@@ -76,34 +77,46 @@ if __name__ == '__main__':
     # Train ODE Module
     t = torch.linspace(0., 0.25, 100, device=device)
     idx = 0
+    duration = 0
+    loss_prev = 1.e10
+    y_bench = torch.tensor(np.transpose(np.load('../result/data/state_pontryagin.npy')))
     for i in range(10000):
         idx += 1
         optimizer.zero_grad()
-        y = odeint(ocp_module, y0, t, method='dopri5', rtol=1e-8, atol=1e-8)
+        y = odeint(ocp_module, y0, t, method='dopri5', rtol=1e-8, atol=1e-8, options={'dtype': torch.float32})
         rnorm = torch.norm(y[:, 0:3], dim=1)
-        loss = torch.mean(torch.abs(rnorm - rho)) + torch.norm(y[-1, :] - yf)
+        loss = torch.norm(y[-1, 0:6] - yf[0:6])**2
+        loss.requires_grad_(True)
+
+        if loss.item() < loss_prev:
+            loss_prev = loss.item()
+            duration = 0
+        else:
+            duration += 1
+            if duration > 500:
+                break
         loss.backward()
         optimizer.step()
 
         if idx % 100 == 0:
-            print("Iter {:04d} | Loss: {}".format(idx, loss.item()))
+            print("Iter {:05d}\t| Loss: {:05f}\t| Energy: {:05f}\t| Terminal error: {:05f}\t".format(idx, loss.item(), ocp_module.energy_objective(t, y), torch.norm(y[-1, 0:6] - yf[0:6])))
         
+    torch.save(ocp_module, '../result/model/ocp_module_tanh.pth')
 
     # Draw figures
-    u = ocp_module.control_net(y)
+    ocp_model = torch.load('../result/model/ocp_module_tanh.pth')
+    ocp_model.eval()
+    t_test = torch.linspace(0., 0.25, 1000)
+    y_test = odeint(ocp_model, y0, t_test, method='dopri5', rtol=1e-8, atol=1e-8, options={'dtype': torch.float32})
+    u = ocp_module.control_net(y_test)
     u_norm = torch.norm(u, dim=1).detach().cpu().numpy()
-    r_norm = torch.norm(y[:, 0:3], dim=1).detach().cpu().numpy()
-    np.save('../result/control_mlp.npy', u)
-    np.save('../result/state_mlp.npy', y)
-    
-    J = ocp_module.energy_objective(t, y)
-    print("Energy Objective: {}".format(J))
-    plt.figure()
-    plt.plot(t, r_norm)
-    plt.show()
-    plt.savefig('../result/r_norm.png')
+    r_norm = torch.norm(y_test[:, 0:3], dim=1).detach().cpu().numpy()
+    print(r_norm)
 
-    plt.figure()
-    plt.plot(t, u_norm)
-    plt.show()
-    plt.savefig('../result/u_norm.png')
+    J = ocp_module.energy_objective(t_test, y_test)
+    print("Energy Objective: {}".format(J))
+
+    u = u.detach().cpu().numpy()
+    y = y_test.detach().cpu().numpy()
+    np.save('../result/data/control_mlp.npy', u)
+    np.save('../result/data/state_mlp.npy', y)

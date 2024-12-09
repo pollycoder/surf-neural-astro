@@ -20,7 +20,7 @@ def ocp_dyn_bvp(t, y):
         v = y[3:6, i]
         lambda13 = y[6:9, i]
         lambda46 = y[9:12, i]
-        mu = lagrange_multiplier(r, v, lambda46, M1, M2, rho)
+        mu = 0.#lagrange_multiplier(r, v, lambda46, M1, M2, rho)
         u[:, i] = 2 * mu * r - lambda46
 
         dydt[0:3, i] = v
