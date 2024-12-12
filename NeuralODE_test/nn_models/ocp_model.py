@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from torch.utils.tensorboard import SummaryWriter
+
 import numpy as np
 from scipy import integrate
 import matplotlib.pyplot as plt
@@ -31,7 +33,7 @@ class OCPModule(nn.Module):
         )
         
     # Forward pass: ODE function
-    # u = theta1 * y[0:3] + theta2 * y[4:6]
+    # u = nn(r, v, t)
     def forward(self, t, y):
         dydt = torch.zeros_like(y, device=device)
         u = self.control_net(y)
@@ -65,6 +67,7 @@ def mlp(input_dim, hidden_dim, output_dim, hidden_depth, output_mod=None, act=nn
 
 # Solve the ODE
 if __name__ == '__main__':
+    writer = SummaryWriter()
     # Boundary conditions
     y0 = torch.tensor([10., 0., 0., 0., 0., torch.pi], device=device)
     yf = torch.tensor([0., 10., 0., 0., 0., torch.pi], device=device)
@@ -79,29 +82,43 @@ if __name__ == '__main__':
     idx = 0
     duration = 0
     loss_prev = 1.e10
-    y_bench = torch.tensor(np.transpose(np.load('../result/data/state_pontryagin.npy')))
+    #y_bench = torch.tensor(np.transpose(np.load('../result/data/state_pontryagin.npy')))
     for i in range(10000):
         idx += 1
         optimizer.zero_grad()
-        y = odeint(ocp_module, y0, t, method='dopri5', rtol=1e-8, atol=1e-8, options={'dtype': torch.float32})
+        y = odeint(ocp_module, y0, t, method='dopri5', rtol=1e-8, atol=1e-8, options={'dtype': torch.float32, 'require_grad': True})
         rnorm = torch.norm(y[:, 0:3], dim=1)
-        loss = torch.norm(y[-1, 0:6] - yf[0:6])**2
+        weight = 1e-2
+        loss = ocp_module.energy_objective(t, y) / 1.e5 * (1-weight) \
+            + torch.norm(y[-1, 0:3] - yf[0:3])**2 * weight/2.        \
+            + torch.norm(y[-1, 3:6] - yf[3:6])**2 * weight/2.        \
+            + torch.mean(torch.abs(rnorm - 10.))**2
         loss.requires_grad_(True)
 
-        if loss.item() < loss_prev:
-            loss_prev = loss.item()
-            duration = 0
-        else:
-            duration += 1
-            if duration > 500:
-                break
+        # if loss.item() < loss_prev:
+        #     loss_prev = loss.item()
+        #     duration = 0
+        # else:
+        #     duration += 1
+        #     if duration > 500:
+        #         break
+        writer.add_scalar("Loss/train", loss, i)
+        writer.add_scalar("Energy/train", ocp_module.energy_objective(t, y), i)
+        writer.add_scalar("Terminal error/train", torch.norm(y[-1, 0:6] - yf[0:6]), i)
+        writer.add_scalar("Constraint error/train", torch.mean(torch.abs(rnorm - 10.)), i)
         loss.backward()
         optimizer.step()
-
+        
         if idx % 100 == 0:
-            print("Iter {:05d}\t| Loss: {:05f}\t| Energy: {:05f}\t| Terminal error: {:05f}\t".format(idx, loss.item(), ocp_module.energy_objective(t, y), torch.norm(y[-1, 0:6] - yf[0:6])))
+            print("Iter {:05d}\t| Loss: {:05f}\t| Energy: {:05f}\t| Terminal error: {:05f}, {:05f}\t| Constraint error: {:05f}"
+                  .format(idx, loss.item(), 
+                          ocp_module.energy_objective(t, y), 
+                          torch.norm(y[-1, 0:3] - yf[0:3]), 
+                          torch.norm(y[-1, 3:6] - yf[3:6]), 
+                          torch.mean(torch.abs(rnorm - 10.))))
         
     torch.save(ocp_module, '../result/model/ocp_module_tanh.pth')
+    writer.flush()
 
     # Draw figures
     ocp_model = torch.load('../result/model/ocp_module_tanh.pth')

@@ -38,7 +38,7 @@ if __name__ == '__main__':
         r = sol.sol(t)[0:3, i]
         v = sol.sol(t)[3:6, i]
         lambda46 = sol.sol(t)[9:12, i]
-        mu = 0.#lagrange_multiplier(r, v, lambda46, M1, M2, rho)
+        mu = lagrange_multiplier(r, v, lambda46, M1, M2, rho)
         u[:, i] = 2 * mu * r - lambda46
 
 
