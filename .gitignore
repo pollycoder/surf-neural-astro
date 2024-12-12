@@ -168,3 +168,4 @@ cython_debug/
 *.pth
 /runs
 *.local.*
+events.out.tfevents.*
