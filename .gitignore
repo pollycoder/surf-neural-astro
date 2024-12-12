@@ -166,3 +166,4 @@ cython_debug/
 *.npz
 *.png
 *.pth
+/runs
