@@ -117,11 +117,11 @@ if __name__ == '__main__':
                           torch.norm(y[-1, 3:6] - yf[3:6]), 
                           torch.mean(torch.abs(rnorm - 10.))))
         
-    torch.save(ocp_module, '../result/model/ocp_module_tanh.pth')
+    torch.save(ocp_module, '../result/model/ocp_module_con.pth')
     writer.flush()
 
     # Draw figures
-    ocp_model = torch.load('../result/model/ocp_module_tanh.pth')
+    ocp_model = torch.load('../result/model/ocp_module_con.pth')
     ocp_model.eval()
     t_test = torch.linspace(0., 0.25, 1000)
     y_test = odeint(ocp_model, y0, t_test, method='dopri5', rtol=1e-8, atol=1e-8, options={'dtype': torch.float32})
